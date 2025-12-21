@@ -24,6 +24,7 @@ def init_database():
     conn = get_connection()
     cursor = conn.cursor()
 
+    # Giderler tablosu
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS giderler (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +37,34 @@ def init_database():
             odeme_yontemi TEXT,
             aciklama TEXT,
             belge_tipi TEXT,
+            olusturma_zamani TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Bütçe tablosu
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS butceler (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kategori TEXT NOT NULL,
+            ay TEXT NOT NULL,
+            limit_tutar REAL NOT NULL,
+            olusturma_zamani TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(kategori, ay)
+        )
+    """)
+
+    # Tekrarlayan giderler tablosu
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tekrar_giderler (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            satici_adi TEXT NOT NULL,
+            kategori TEXT NOT NULL,
+            tutar REAL NOT NULL,
+            tekrar_tipi TEXT NOT NULL,
+            gun INTEGER,
+            aktif INTEGER DEFAULT 1,
+            son_islem_tarihi DATE,
+            aciklama TEXT,
             olusturma_zamani TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -287,6 +316,231 @@ def toplam_istatistikler() -> Dict[str, Any]:
         'bu_ay_toplam': bu_ay_toplam,
         'son_kayitlar': son_kayitlar
     }
+
+
+# ==================== BÜTÇE FONKSİYONLARI ====================
+
+def butce_ekle_guncelle(kategori: str, ay: str, limit_tutar: float) -> bool:
+    """Bütçe ekler veya günceller."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT OR REPLACE INTO butceler (kategori, ay, limit_tutar)
+        VALUES (?, ?, ?)
+    """, (kategori, ay, limit_tutar))
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+def butceleri_getir(ay: str = None) -> pd.DataFrame:
+    """Bütçeleri getirir."""
+    conn = get_connection()
+
+    if ay:
+        query = "SELECT * FROM butceler WHERE ay = ?"
+        df = pd.read_sql_query(query, conn, params=[ay])
+    else:
+        query = "SELECT * FROM butceler ORDER BY ay DESC, kategori"
+        df = pd.read_sql_query(query, conn)
+
+    conn.close()
+    return df
+
+
+def butce_sil(butce_id: int) -> bool:
+    """Bütçe kaydını siler."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM butceler WHERE id = ?", (butce_id,))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def butce_durum_getir(ay: str) -> pd.DataFrame:
+    """Bütçe durumunu giderlerle karşılaştırır."""
+    conn = get_connection()
+
+    query = """
+        SELECT
+            b.kategori,
+            b.limit_tutar,
+            COALESCE(SUM(g.toplam_tutar), 0) as harcanan,
+            b.limit_tutar - COALESCE(SUM(g.toplam_tutar), 0) as kalan
+        FROM butceler b
+        LEFT JOIN giderler g ON b.kategori = g.kategori
+            AND strftime('%Y-%m', g.tarih) = b.ay
+        WHERE b.ay = ?
+        GROUP BY b.kategori, b.limit_tutar
+        ORDER BY b.kategori
+    """
+
+    df = pd.read_sql_query(query, conn, params=[ay])
+    conn.close()
+    return df
+
+
+# ==================== TEKRARLAYAN GİDER FONKSİYONLARI ====================
+
+def tekrar_gider_ekle(data: Dict[str, Any]) -> int:
+    """Tekrarlayan gider ekler."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO tekrar_giderler (satici_adi, kategori, tutar, tekrar_tipi, gun, aciklama)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        data.get('satici_adi'),
+        data.get('kategori'),
+        data.get('tutar'),
+        data.get('tekrar_tipi'),
+        data.get('gun'),
+        data.get('aciklama')
+    ))
+
+    gider_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return gider_id
+
+
+def tekrar_giderleri_getir(sadece_aktif: bool = True) -> pd.DataFrame:
+    """Tekrarlayan giderleri getirir."""
+    conn = get_connection()
+
+    if sadece_aktif:
+        query = "SELECT * FROM tekrar_giderler WHERE aktif = 1 ORDER BY satici_adi"
+    else:
+        query = "SELECT * FROM tekrar_giderler ORDER BY aktif DESC, satici_adi"
+
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    return df
+
+
+def tekrar_gider_sil(gider_id: int) -> bool:
+    """Tekrarlayan gideri siler."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tekrar_giderler WHERE id = ?", (gider_id,))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def tekrar_gider_toggle(gider_id: int) -> bool:
+    """Tekrarlayan giderin aktif/pasif durumunu değiştirir."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE tekrar_giderler
+        SET aktif = CASE WHEN aktif = 1 THEN 0 ELSE 1 END
+        WHERE id = ?
+    """, (gider_id,))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def tekrar_giderleri_isle():
+    """Bugün işlenmesi gereken tekrarlayan giderleri gider olarak ekler."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    bugun = datetime.now()
+    bugun_str = bugun.strftime('%Y-%m-%d')
+    bu_ay = bugun.strftime('%Y-%m')
+
+    # Aktif tekrarlayan giderleri getir
+    cursor.execute("""
+        SELECT * FROM tekrar_giderler
+        WHERE aktif = 1
+        AND (son_islem_tarihi IS NULL OR strftime('%Y-%m', son_islem_tarihi) != ?)
+    """, (bu_ay,))
+
+    tekrar_giderler = cursor.fetchall()
+
+    for tg in tekrar_giderler:
+        # Aylık giderler için her ayın belirli günü
+        if tg['tekrar_tipi'] == 'aylik':
+            islem_gunu = tg['gun'] or 1
+            if bugun.day >= islem_gunu:
+                # Gider ekle
+                cursor.execute("""
+                    INSERT INTO giderler (tarih, satici_adi, toplam_tutar, kategori, aciklama, odeme_yontemi)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (bugun_str, tg['satici_adi'], tg['tutar'], tg['kategori'],
+                      f"[Otomatik] {tg['aciklama'] or ''}", 'belirsiz'))
+
+                # Son işlem tarihini güncelle
+                cursor.execute("""
+                    UPDATE tekrar_giderler SET son_islem_tarihi = ? WHERE id = ?
+                """, (bugun_str, tg['id']))
+
+    conn.commit()
+    conn.close()
+
+
+# ==================== GELİŞMİŞ FİLTRELEME ====================
+
+def giderleri_getir_gelismis(
+    baslangic_tarih: Optional[str] = None,
+    bitis_tarih: Optional[str] = None,
+    kategori: Optional[List[str]] = None,
+    min_tutar: Optional[float] = None,
+    max_tutar: Optional[float] = None,
+    odeme_yontemi: Optional[List[str]] = None,
+    arama: Optional[str] = None
+) -> pd.DataFrame:
+    """Gelişmiş filtreleme ile giderleri getirir."""
+    conn = get_connection()
+
+    query = "SELECT * FROM giderler WHERE 1=1"
+    params = []
+
+    if baslangic_tarih:
+        query += " AND tarih >= ?"
+        params.append(baslangic_tarih)
+
+    if bitis_tarih:
+        query += " AND tarih <= ?"
+        params.append(bitis_tarih)
+
+    if kategori and len(kategori) > 0:
+        placeholders = ','.join(['?' for _ in kategori])
+        query += f" AND kategori IN ({placeholders})"
+        params.extend(kategori)
+
+    if min_tutar is not None:
+        query += " AND toplam_tutar >= ?"
+        params.append(min_tutar)
+
+    if max_tutar is not None:
+        query += " AND toplam_tutar <= ?"
+        params.append(max_tutar)
+
+    if odeme_yontemi and len(odeme_yontemi) > 0:
+        placeholders = ','.join(['?' for _ in odeme_yontemi])
+        query += f" AND odeme_yontemi IN ({placeholders})"
+        params.extend(odeme_yontemi)
+
+    if arama:
+        query += " AND (satici_adi LIKE ? OR aciklama LIKE ?)"
+        params.extend([f'%{arama}%', f'%{arama}%'])
+
+    query += " ORDER BY tarih DESC, id DESC"
+
+    df = pd.read_sql_query(query, conn, params=params)
+    conn.close()
+
+    return df
 
 
 # Veritabanını başlat

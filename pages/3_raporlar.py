@@ -12,6 +12,7 @@ from dateutil.relativedelta import relativedelta
 from utils.veritabani import kategori_ozet, aylik_ozet, giderleri_getir
 from utils.kategorileme import GIDER_KATEGORILERI
 from utils.muhasebe_bilgi import rapor_insight_uret
+from utils.export import generate_report_html, export_to_excel
 
 # Sayfa yapılandırması
 st.set_page_config(
@@ -251,6 +252,44 @@ else:
         }
     )
 
+    # Rapor Dışa Aktarım
+    st.divider()
+    st.subheader("📥 Rapor İndir")
+
+    col_exp1, col_exp2, col_exp3 = st.columns(3)
+
+    donem_str = f"{baslangic_tarih.strftime('%d.%m.%Y')} - {bitis_tarih.strftime('%d.%m.%Y')}"
+
+    with col_exp1:
+        # HTML Rapor
+        html_rapor = generate_report_html(
+            kategori_df,
+            aylik_df,
+            donem_str,
+            toplam_gider
+        )
+        st.download_button(
+            "📄 HTML Rapor",
+            data=html_rapor,
+            file_name=f"gider_raporu_{baslangic_tarih}_{bitis_tarih}.html",
+            mime="text/html",
+            use_container_width=True
+        )
+
+    with col_exp2:
+        # Excel
+        excel_data = export_to_excel(giderler_df, "Giderler")
+        st.download_button(
+            "📊 Excel",
+            data=excel_data,
+            file_name=f"giderler_{baslangic_tarih}_{bitis_tarih}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+    with col_exp3:
+        st.info("💡 HTML raporu tarayıcıda açıp PDF olarak yazdırabilirsiniz.")
+
 # Alt bilgi
 st.divider()
 st.markdown("""
@@ -258,4 +297,5 @@ st.markdown("""
 - Farklı dönemleri karşılaştırarak harcama trendlerinizi analiz edin
 - En yüksek harcama kategorilerinize dikkat edin
 - Aylık trend grafiği ile mevsimsel değişimleri takip edin
+- HTML raporu indirip tarayıcıda Ctrl+P ile PDF olarak kaydedebilirsiniz
 """)
