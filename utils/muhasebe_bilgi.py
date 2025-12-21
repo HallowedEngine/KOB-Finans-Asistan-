@@ -140,8 +140,15 @@ Kullanıcı sorusu: {soru}
 
 def get_openai_client() -> Optional[OpenAI]:
     """OpenAI client oluşturur."""
-    api_key = st.secrets.get("OPENAI_API_KEY") if hasattr(st, 'secrets') else None
+    api_key = None
 
+    # Önce Streamlit secrets'tan dene
+    try:
+        api_key = st.secrets.get("OPENAI_API_KEY")
+    except Exception:
+        pass
+
+    # Bulunamadıysa environment variable'dan dene
     if not api_key:
         api_key = os.getenv("OPENAI_API_KEY")
 
