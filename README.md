@@ -1,141 +1,73 @@
-# KOBİ Finans Asistanı
+# KOBI Finans Asistani
 
-Türkiye'deki küçük işletme sahipleri için AI destekli finans asistanı uygulaması.
+KOBI Finans Asistani is a Streamlit app for small business owners in Turkey. It helps users read expense documents, categorize costs, track recurring payments, and ask basic accounting questions through an AI-assisted interface.
 
-## Özellikler
+## Product Focus
 
-### 1. Belge Okuyucu
-- Fatura, fiş, dekont ve makbuz fotoğraflarından otomatik veri çıkarma
-- GPT-4o Vision ile akıllı OCR
-- Çıkarılan verileri düzenleme ve kaydetme
+The project is designed around a common small-business workflow: collect invoices and receipts, turn them into structured expense records, understand monthly spending patterns, and get plain-language guidance before speaking with an accountant.
 
-### 2. Gider Takibi
-- Otomatik kategori tahmini
-- 17 farklı gider kategorisi
-- Manuel gider ekleme
-- Filtreleme ve arama
+## Core Features
 
-### 3. Raporlar
-- Kategori bazlı pasta ve çubuk grafikler
-- Aylık trend analizi
-- Dönem karşılaştırması
-- AI destekli içgörüler
+- Document reader for invoices, receipts, bank slips, and expense documents
+- GPT-4o Vision-assisted OCR and structured field extraction
+- Manual expense entry and searchable expense history
+- Automatic expense category suggestions
+- Budget and recurring expense pages
+- Category, trend, and period-comparison reports
+- Turkish accounting knowledge base for question-answer support
+- Excel export for offline review or accountant handoff
 
-### 4. Soru-Cevap
-- Türk vergi mevzuatı bilgi bankası
-- Muhasebe sorularına AI destekli yanıtlar
-- Örnek sorular ile hızlı başlangıç
+## Tech Stack
 
-## Kurulum
+- Python, Streamlit
+- OpenAI GPT-4o
+- SQLite
+- Pandas, Plotly
+- Pillow, python-dotenv
 
-### Gereksinimler
-- Python 3.11+
-- OpenAI API anahtarı
+## Getting Started
 
-### Adımlar
-
-1. **Repoyu klonlayın:**
 ```bash
-git clone https://github.com/kullanici/kobi-finans-asistani.git
-cd kobi-finans-asistani
-```
-
-2. **Sanal ortam oluşturun (önerilen):**
-```bash
+git clone https://github.com/HallowedEngine/KOB-Finans-Asistan-.git
+cd KOB-Finans-Asistan-
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# veya
-venv\Scripts\activate  # Windows
-```
-
-3. **Bağımlılıkları yükleyin:**
-```bash
+venv\Scripts\activate
 pip install -r requirements.txt
+copy .env.example .env
 ```
 
-4. **API anahtarını ayarlayın:**
-```bash
-cp .env.example .env
-# .env dosyasını düzenleyip OPENAI_API_KEY değerini girin
+Edit `.env` and set your OpenAI API key:
+
+```env
+OPENAI_API_KEY=sk-your-api-key-here
 ```
 
-5. **Uygulamayı başlatın:**
+Run the app:
+
 ```bash
 streamlit run app.py
 ```
 
-## Streamlit Cloud Deployment
+## Project Structure
 
-Streamlit Cloud'a deploy ederken:
-
-1. GitHub reposunu Streamlit Cloud'a bağlayın
-2. **Secrets** bölümünde API anahtarını ekleyin:
-```toml
-OPENAI_API_KEY = "sk-..."
+```text
+app.py                 Main Streamlit entry point
+pages/                 Feature pages
+  1_belge_okuyucu.py   Document OCR workflow
+  2_giderlerim.py      Expense list and filtering
+  3_raporlar.py        Reporting dashboard
+  4_soru_cevap.py      Accounting Q&A assistant
+  5_butce.py           Budget tracking
+  6_tekrar_giderler.py Recurring expenses
+utils/                 OCR, categorization, database, and export helpers
+config.py              Application settings
+requirements.txt       Python dependencies
 ```
 
-## Gider Kategorileri
+## Portfolio Notes
 
-| Kategori | Açıklama |
-|----------|----------|
-| kira | Kira ve Aidat |
-| personel | Personel ve Maaşlar |
-| elektrik | Elektrik Faturaları |
-| su | Su Faturaları |
-| dogalgaz | Doğalgaz Faturaları |
-| internet_telefon | İnternet ve Telefon |
-| yakit | Yakıt ve Ulaşım |
-| ofis_malzeme | Ofis Malzemeleri |
-| hammadde | Hammadde ve Malzeme |
-| pazarlama | Pazarlama ve Reklam |
-| vergi | Vergi ve Harçlar |
-| sigorta | Sigorta |
-| bakim_onarim | Bakım ve Onarım |
-| yemek | Yemek ve İkram |
-| egitim | Eğitim ve Danışmanlık |
-| banka | Banka Masrafları |
-| diger | Diğer |
+This repository demonstrates a practical AI workflow for a local market: document understanding, structured extraction, expense analytics, and a simple business-facing interface. The next production steps would be user accounts, stronger validation for extracted document fields, audit logs, and accountant-approved knowledge sources.
 
-## Proje Yapısı
+## Disclaimer
 
-```
-kobi-finans-asistani/
-├── app.py                    # Ana Streamlit uygulaması
-├── pages/
-│   ├── 1_belge_okuyucu.py   # Belge okuma sayfası
-│   ├── 2_giderlerim.py      # Gider listesi sayfası
-│   ├── 3_raporlar.py        # Raporlar sayfası
-│   └── 4_soru_cevap.py      # Chatbot sayfası
-├── utils/
-│   ├── ocr_parser.py        # GPT-4o Vision OCR
-│   ├── kategorileme.py      # Kategori tahmini
-│   ├── veritabani.py        # SQLite işlemleri
-│   └── muhasebe_bilgi.py    # Bilgi bankası
-├── data/
-│   └── giderler.db          # SQLite veritabanı
-├── .streamlit/
-│   └── config.toml          # Tema ayarları
-├── config.py                 # Uygulama ayarları
-├── requirements.txt          # Bağımlılıklar
-└── README.md
-```
-
-## Teknolojiler
-
-- **Streamlit** - Web arayüzü
-- **OpenAI GPT-4o** - OCR ve AI asistan
-- **SQLite** - Yerel veritabanı
-- **Pandas** - Veri işleme
-- **Plotly** - Grafikler
-
-## Lisans
-
-MIT License
-
-## Katkıda Bulunma
-
-Pull request'ler memnuniyetle karşılanır. Büyük değişiklikler için önce bir issue açınız.
-
-## Uyarı
-
-Bu uygulama genel bilgi amaçlıdır ve profesyonel mali danışmanlık yerine geçmez. Önemli mali kararlarınız için mutlaka bir mali müşavire danışınız.
+This app is for educational and informational use. It is not a replacement for professional accounting, tax, or legal advice.
